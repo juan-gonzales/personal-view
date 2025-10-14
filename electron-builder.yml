@@ -1,0 +1,12 @@
+appId: com.personal.view
+productName: Personal View
+files:
+  - dist-electron/**/*
+  - dist/renderer/**/*
+  - package.json
+directories:
+  output: release
+  buildResources: build
+asar: true
+extraMetadata:
+  main: dist-electron/main.js
