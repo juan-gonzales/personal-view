@@ -26,6 +26,11 @@ const isDev = process.env.VITE_DEV_SERVER_URL !== undefined;
 
 let mainWindow: BrowserWindow | null = null;
 
+// Extender el tipo _Object para incluir contentType
+interface ExtendedObject extends _Object {
+  contentType?: string;
+}
+
 const CHANNELS = {
   LIST: 'r2:list',
   SIGN: 'r2:sign',
@@ -101,8 +106,8 @@ async function readContentType(object: _Object): Promise<string | undefined> {
   }
 }
 
-async function withContentTypes(objects: _Object[]): Promise<_Object[]> {
-  const results: _Object[] = new Array(objects.length);
+async function withContentTypes(objects: _Object[]): Promise<ExtendedObject[]> {
+  const results: ExtendedObject[] = new Array(objects.length);
   let cursor = 0;
   const workers = Array.from({ length: Math.min(8, objects.length) }, async () => {
     while (true) {
@@ -110,10 +115,11 @@ async function withContentTypes(objects: _Object[]): Promise<_Object[]> {
       if (index >= objects.length) break;
       const object = objects[index];
       const contentType = await readContentType(object);
-      if (contentType) {
-        object.Metadata = { ...(object.Metadata || {}), contentType };
-      }
-      results[index] = object;
+      // Crear nuevo objeto con contentType
+      results[index] = {
+        ...object,
+        contentType
+      };
     }
   });
   await Promise.all(workers);
@@ -121,16 +127,25 @@ async function withContentTypes(objects: _Object[]): Promise<_Object[]> {
 }
 
 async function createWindow() {
+  const preloadPath = path.join(__dirname, 'preload.js');
+  console.log('🔧 Creando ventana con preload:', preloadPath);
+  
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
     backgroundColor: '#111111',
+    show: false, // ← IMPORTANTE: no mostrar hasta que esté listo
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: preloadPath,
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true
+      sandbox: false
     }
+  });
+
+  // Esperar a que el preload termine ANTES de cargar contenido
+  mainWindow.webContents.once('preload-error', (event, preloadPath, error) => {
+    console.error('❌ Error en preload:', error);
   });
 
   if (isDev && process.env.VITE_DEV_SERVER_URL) {
@@ -139,8 +154,13 @@ async function createWindow() {
   } else {
     await mainWindow.loadFile(path.join(__dirname, '../dist/renderer/index.html'));
   }
-}
 
+  // Mostrar ventana solo cuando esté completamente lista
+  mainWindow.once('ready-to-show', () => {
+    console.log('🔧 Ventana lista - mostrando');
+    mainWindow?.show();
+  });
+}
 app.whenReady().then(() => {
   createWindow().catch((err) => {
     console.error('Failed to create window', err);
@@ -172,13 +192,13 @@ ipcMain.handle(CHANNELS.LIST, async (_event, payload) => {
     bucket: r2Config.bucket,
     prefix: effectivePrefix,
     objects: objects
-      .filter((item): item is _Object & { Key: string } => Boolean(item.Key))
+      .filter((item): item is ExtendedObject & { Key: string } => Boolean(item.Key))
       .map((item) => ({
         key: item.Key!,
         size: item.Size ?? 0,
         eTag: item.ETag ?? '',
         lastModified: item.LastModified?.toISOString(),
-        contentType: item.Metadata?.contentType
+        contentType: item.contentType
       })),
     commonPrefixes: (response.CommonPrefixes || []).map((item) => item.Prefix).filter(Boolean) as string[],
     continuationToken: response.ContinuationToken,
