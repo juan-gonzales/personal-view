@@ -4,7 +4,7 @@
     "module": "CommonJS",
     "moduleResolution": "Node",
     "outDir": "dist-electron",
-    "rootDir": "./",
+    "rootDir": "electron",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -12,6 +12,6 @@
     "types": ["node"],
     "resolveJsonModule": true
   },
-  "include": ["electron/**/*.ts", "src/shared/**/*.ts", "electron-env.d.ts"],
-  "exclude": ["node_modules", "src/renderer"]
+  "include": ["electron/**/*.ts", "electron-env.d.ts"],
+  "exclude": ["node_modules"]
 }
